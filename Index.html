@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Tower Defense - Levels & Upgrades</title>
+  <style>
+    body {
+      margin: 0;
+      background: #222;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      display: block;
+      background: #e6f2ff;
+      margin: auto;
+      border: 2px solid #000;
+    }
+  </style>
+</head>
+<body>
+<canvas id="game" width="1280" height="720"></canvas>
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+const TILE_SIZE = 60;
+
+let enemies = [];
+let towers = [];
+let bullets = [];
+let coins = 8;
+let lives = 10;
+let level = 1;
+let enemiesToSpawn = 5;
+let enemiesSpawned = 0;
+let levelInProgress = true;
+let nextLevelCooldown = 180;
+
+const path = [
+  {x: 0, y: 6}, {x: 15, y: 6}, {x: 15, y: 10}, {x: 5, y: 10}, {x: 5, y: 11}, {x: 20, y: 11}
+];
+
+class Enemy {
+  constructor(speed, health, color = "red") {
+    this.x = path[0].x * TILE_SIZE;
+    this.y = path[0].y * TILE_SIZE;
+    this.health = health;
+    this.maxHealth = health;
+    this.speed = speed;
+    this.pathIndex = 0;
+    this.size = TILE_SIZE / 2;
+    this.dead = false;
+    this.color = color;
+  }
+
+  update() {
+    const target = path[this.pathIndex + 1];
+    if (!target) {
+      lives--;
+      this.health = 0;
+      return;
+    }
+
+    const tx = target.x * TILE_SIZE;
+    const ty = target.y * TILE_SIZE;
+    const dx = tx - this.x;
+    const dy = ty - this.y;
+    const dist = Math.hypot(dx, dy);
+    const moveX = (dx / dist) * this.speed;
+    const moveY = (dy / dist) * this.speed;
+
+    if (dist < this.speed) {
+      this.x = tx;
+      this.y = ty;
+      this.pathIndex++;
+    } else {
+      this.x += moveX;
+      this.y += moveY;
+    }
+  }
+
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.size, this.size);
+    ctx.fillStyle = "black";
+    ctx.fillRect(this.x, this.y - 6, this.size, 4);
+    ctx.fillStyle = "limegreen";
+    ctx.fillRect(this.x, this.y - 6, this.size * (this.health / this.maxHealth), 4);
+  }
+}
+
+class Tower {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.range = 150;
+    this.fireRate = 60;
+    this.counter = 0;
+    this.level = 1;
+  }
+
+  upgrade() {
+    const cost = 4 + this.level * 2;
+    if (coins >= cost) {
+      this.level++;
+      this.range += 20;
+      this.fireRate = Math.max(10, this.fireRate - 5);
+      coins -= cost;
+    }
+  }
+
+  update() {
+    this.counter++;
+    if (this.counter >= this.fireRate) {
+      const target = enemies.find(e => distance(this.x, this.y, e.x, e.y) < this.range);
+      if (target) {
+        bullets.push(new Bullet(this.x + TILE_SIZE / 2, this.y + TILE_SIZE / 2, target));
+        this.counter = 0;
+      }
+    }
+  }
+
+  draw() {
+    ctx.fillStyle = "blue";
+    ctx.beginPath();
+    ctx.arc(this.x + TILE_SIZE/2, this.y + TILE_SIZE/2, TILE_SIZE/2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.strokeStyle = "rgba(0,0,255,0.2)";
+    ctx.arc(this.x + TILE_SIZE/2, this.y + TILE_SIZE/2, this.range, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = "white";
+    ctx.font = "12px Arial";
+    ctx.fillText(`Lv${this.level}`, this.x + 5, this.y + 15);
+  }
+}
+
+class Bullet {
+  constructor(x, y, target) {
+    this.x = x;
+    this.y = y;
+    this.target = target;
+    this.speed = 6;
+    this.radius = 5;
+  }
+
+  update() {
+    if (!this.target || this.target.health <= 0) return false;
+    const dx = this.target.x - this.x;
+    const dy = this.target.y - this.y;
+    const dist = Math.hypot(dx, dy);
+    const moveX = (dx / dist) * this.speed;
+    const moveY = (dy / dist) * this.speed;
+    this.x += moveX;
+    this.y += moveY;
+
+    if (distance(this.x, this.y, this.target.x, this.target.y) < 10) {
+      this.target.health -= 40;
+      if (this.target.health <= 0 && !this.target.dead) {
+        coins += 2;
+        this.target.dead = true;
+      }
+      return false;
+    }
+    return true;
+  }
+
+  draw() {
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function distance(x1, y1, x2, y2) {
+  return Math.hypot(x2 - x1, y2 - y1);
+}
+
+canvas.addEventListener("click", (e) => {
+  const rect = canvas.getBoundingClientRect();
+  const x = Math.floor((e.clientX - rect.left) / TILE_SIZE) * TILE_SIZE;
+  const y = Math.floor((e.clientY - rect.top) / TILE_SIZE) * TILE_SIZE;
+  const tower = towers.find(t => t.x === x && t.y === y);
+
+  if (tower) {
+    tower.upgrade();
+  } else if (coins >= 4) {
+    towers.push(new Tower(x, y));
+    coins -= 4;
+  }
+});
+
+let frame = 0;
+
+function drawPathLine() {
+  ctx.strokeStyle = "#888";
+  ctx.lineWidth = 4;
+  ctx.beginPath();
+  ctx.moveTo(path[0].x * TILE_SIZE + TILE_SIZE/2, path[0].y * TILE_SIZE + TILE_SIZE/2);
+  for (let i = 1; i < path.length; i++) {
+    ctx.lineTo(path[i].x * TILE_SIZE + TILE_SIZE/2, path[i].y * TILE_SIZE + TILE_SIZE/2);
+  }
+  ctx.stroke();
+}
+
+function gameLoop() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  drawPathLine();
+  ctx.fillStyle = "black";
+  ctx.font = "24px Arial";
+  ctx.fillText(`Coins: ${coins}`, 20, 30);
+  ctx.fillText(`Lives: ${lives}`, 160, 30);
+  ctx.fillText(`Level: ${level}`, 300, 30);
+
+  if (lives <= 0) {
+    ctx.fillStyle = "red";
+    ctx.font = "60px Arial";
+    ctx.fillText("Game Over!", canvas.width / 2 - 150, canvas.height / 2);
+    return;
+  }
+
+  if (levelInProgress) {
+    if (frame % 60 === 0 && enemiesSpawned < enemiesToSpawn) {
+      const color = level >= 15 ? "purple" : level >= 10 ? "orange" : level >= 5 ? "green" : "red";
+      const speed = 1 + level * 0.25;
+      const health = 100 + level * 25;
+      enemies.push(new Enemy(speed, health, color));
+      enemiesSpawned++;
+    }
+
+    enemies.forEach(e => e.update());
+    enemies = enemies.filter(e => e.health > 0);
+    enemies.forEach(e => e.draw());
+
+    towers.forEach(t => {
+      t.update();
+      t.draw();
+    });
+
+    bullets = bullets.filter(b => {
+      const alive = b.update();
+      if (alive) b.draw();
+      return alive;
+    });
+
+    if (enemiesSpawned === enemiesToSpawn && enemies.length === 0) {
+      levelInProgress = false;
+      nextLevelCooldown = 180;
+    }
+  } else {
+    towers.forEach(t => t.draw());
+    enemies.forEach(e => e.draw());
+    bullets.forEach(b => b.draw());
+
+    nextLevelCooldown--;
+    if (nextLevelCooldown <= 0 && level < 20) {
+      level++;
+      enemiesSpawned = 0;
+      enemiesToSpawn = 5 + level * 2;
+      levelInProgress = true;
+    } else if (level === 20 && enemies.length === 0) {
+      ctx.fillStyle = "lime";
+      ctx.font = "60px Arial";
+      ctx.fillText("You Win!", canvas.width / 2 - 150, canvas.height / 2);
+      return;
+    }
+  }
+
+  frame++;
+  requestAnimationFrame(gameLoop);
+}
+
+gameLoop();
+</script>
+</body>
+</html>
