@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Tower Defense - Scoreboard & Enemies</title>
+  <title>Tower Defense - Updated</title>
   <style>
     body {
       margin: 0;
@@ -56,6 +56,8 @@ let levelInProgress = true;
 let nextLevelCooldown = 180;
 let score = 0;
 let paused = false;
+let frame = 0;
+let animationId;
 
 const path = [
   {x: 0, y: 6}, {x: 15, y: 6}, {x: 15, y: 10}, {x: 5, y: 10}, {x: 5, y: 11}, {x: 20, y: 11}
@@ -108,11 +110,11 @@ class Enemy {
   }
 
   draw() {
-    // Custom glowing square enemy style
     ctx.shadowColor = this.color;
     ctx.shadowBlur = 15;
-    ctx.fillStyle = this.color;
-    ctx.fillRect(this.x, this.y, this.size, this.size);
+    ctx.strokeStyle = this.color;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(this.x, this.y, this.size, this.size);
     ctx.shadowBlur = 0;
 
     ctx.fillStyle = "black";
@@ -154,7 +156,6 @@ class Tower {
   }
 
   draw() {
-    // Custom hex-style tower
     ctx.fillStyle = "#00ffff";
     ctx.beginPath();
     const cx = this.x + TILE_SIZE/2;
@@ -183,38 +184,31 @@ class Bullet {
     this.x = x;
     this.y = y;
     this.target = target;
-    this.speed = 6;
-    this.radius = 5;
   }
 
   update() {
     if (!this.target || this.target.health <= 0) return false;
-    const dx = this.target.x - this.x;
-    const dy = this.target.y - this.y;
-    const dist = Math.hypot(dx, dy);
-    const moveX = (dx / dist) * this.speed;
-    const moveY = (dy / dist) * this.speed;
-    this.x += moveX;
-    this.y += moveY;
-
-    if (distance(this.x, this.y, this.target.x, this.target.y) < 10) {
-      this.target.health -= 40;
-      if (this.target.health <= 0 && !this.target.dead) {
-        const gain = enemyColors[this.target.color] || 2;
-        coins += gain;
-        score += gain;
-        this.target.dead = true;
-      }
-      return false;
+    this.target.health -= 40;
+    if (this.target.health <= 0 && !this.target.dead) {
+      const gain = enemyColors[this.target.color] || 2;
+      coins += gain;
+      score += gain;
+      this.target.dead = true;
     }
-    return true;
+    return false; // Instantly destroy bullet
   }
 
   draw() {
-    ctx.fillStyle = "black";
+    ctx.save();
+    ctx.strokeStyle = "#00f0ff";
+    ctx.lineWidth = 3;
+    ctx.shadowBlur = 10;
+    ctx.shadowColor = "#00f0ff";
     ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.moveTo(this.x, this.y);
+    ctx.lineTo(this.target.x + TILE_SIZE / 4, this.target.y + TILE_SIZE / 4);
+    ctx.stroke();
+    ctx.restore();
   }
 }
 
@@ -250,14 +244,12 @@ function restartGame() {
   score = 0;
   paused = false;
   frame = 0;
-  gameLoop();
 }
 
 function togglePause() {
   paused = !paused;
+  if (!paused) gameLoop();
 }
-
-let frame = 0;
 
 function drawPathLine() {
   ctx.strokeStyle = "#888";
@@ -271,7 +263,8 @@ function drawPathLine() {
 }
 
 function gameLoop() {
-  if (paused) return requestAnimationFrame(gameLoop);
+  animationId = requestAnimationFrame(gameLoop);
+  if (paused) return;
 
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawPathLine();
@@ -336,7 +329,6 @@ function gameLoop() {
   }
 
   frame++;
-  requestAnimationFrame(gameLoop);
 }
 
 gameLoop();
