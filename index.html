@@ -2,16 +2,16 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Tower Defense - Levels & Upgrades</title>
+  <title>Tower Defense - Scoreboard & Enemies</title>
   <style>
     body {
       margin: 0;
-      background: #222;
+      background: black;
       font-family: Arial, sans-serif;
     }
     canvas {
       display: block;
-      background: #e6f2ff;
+      background: black;
       margin: auto;
       border: 2px solid #000;
     }
@@ -34,10 +34,18 @@ let enemiesToSpawn = 5;
 let enemiesSpawned = 0;
 let levelInProgress = true;
 let nextLevelCooldown = 180;
+let score = 0;
 
 const path = [
   {x: 0, y: 6}, {x: 15, y: 6}, {x: 15, y: 10}, {x: 5, y: 10}, {x: 5, y: 11}, {x: 20, y: 11}
 ];
+
+const enemyColors = {
+  red: 2,
+  green: 3,
+  orange: 4,
+  purple: 5
+};
 
 class Enemy {
   constructor(speed, health, color = "red") {
@@ -120,13 +128,23 @@ class Tower {
   }
 
   draw() {
-    ctx.fillStyle = "blue";
+    // Tower styled to resemble the provided image (hex-like look)
+    ctx.fillStyle = "#00ffff";
     ctx.beginPath();
-    ctx.arc(this.x + TILE_SIZE/2, this.y + TILE_SIZE/2, TILE_SIZE/2, 0, Math.PI * 2);
+    const cx = this.x + TILE_SIZE/2;
+    const cy = this.y + TILE_SIZE/2;
+    const radius = TILE_SIZE/2;
+    for (let i = 0; i < 6; i++) {
+      const angle = Math.PI / 3 * i;
+      const x = cx + radius * Math.cos(angle);
+      const y = cy + radius * Math.sin(angle);
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
     ctx.fill();
-    ctx.beginPath();
-    ctx.strokeStyle = "rgba(0,0,255,0.2)";
-    ctx.arc(this.x + TILE_SIZE/2, this.y + TILE_SIZE/2, this.range, 0, Math.PI * 2);
+
+    ctx.strokeStyle = "#007777";
     ctx.stroke();
     ctx.fillStyle = "white";
     ctx.font = "12px Arial";
@@ -156,7 +174,9 @@ class Bullet {
     if (distance(this.x, this.y, this.target.x, this.target.y) < 10) {
       this.target.health -= 40;
       if (this.target.health <= 0 && !this.target.dead) {
-        coins += 2;
+        const gain = enemyColors[this.target.color] || 2;
+        coins += gain;
+        score += gain;
         this.target.dead = true;
       }
       return false;
@@ -206,11 +226,13 @@ function drawPathLine() {
 function gameLoop() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   drawPathLine();
-  ctx.fillStyle = "black";
+
+  ctx.fillStyle = "white";
   ctx.font = "24px Arial";
   ctx.fillText(`Coins: ${coins}`, 20, 30);
   ctx.fillText(`Lives: ${lives}`, 160, 30);
   ctx.fillText(`Level: ${level}`, 300, 30);
+  ctx.fillText(`Score: ${score}`, 460, 30);
 
   if (lives <= 0) {
     ctx.fillStyle = "red";
@@ -222,9 +244,7 @@ function gameLoop() {
   if (levelInProgress) {
     if (frame % 60 === 0 && enemiesSpawned < enemiesToSpawn) {
       const color = level >= 15 ? "purple" : level >= 10 ? "orange" : level >= 5 ? "green" : "red";
-      const speed = 1 + level * 0.25;
-      const health = 100 + level * 25;
-      enemies.push(new Enemy(speed, health, color));
+      enemies.push(new Enemy(1 + level * 0.25, 100 + level * 25, color));
       enemiesSpawned++;
     }
 
